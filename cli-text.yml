@@ -1,0 +1,18 @@
+#------------------------------------------------------------#
+#   CloudFormation 操作用のコマンド
+#------------------------------------------------------------#
+
+# aws cloudformation deploy dry run
+aws cloudformation deploy \
+--template-file alb-ecs.yml \
+--stack-name ecs-test --no-execute-changeset
+
+# aws cloudformation deploy production run
+aws cloudformation deploy \
+--template-file alb-ecs.yml \
+--capabilities CAPABILITY_NAMED_IAM \
+--stack-name ecs-test
+
+
+
+

@@ -1,0 +1,357 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+
+#------------------------------------------------------------#
+#   parameter
+#------------------------------------------------------------#
+
+Parameters:
+  PJPrefix:
+    Type: String
+    Default: "test"
+  AvailabilityA:
+    Type: String
+    Default: ap-northeast-1a
+  AvailabilityC:
+    Type: String
+    Default: ap-northeast-1c
+  VPCCIDR:
+    Type: String
+    Default: "10.0.0.0/16"
+  PublicSubnetACIDR:
+    Type: String
+    Default: "10.0.10.0/24"
+  PublicSubnetCCIDR:
+    Type: String
+    Default: "10.0.20.0/24"
+  PrivateSubnetACIDR:
+    Type: String
+    Default: "10.0.30.0/24"
+  PrivateSubnetCCIDR:
+    Type: String
+    Default: "10.0.40.0/24"
+  ECSImage:
+    Type: String
+    Default: "test"
+  ECSTaskDesiredCount:
+    Type: Number
+    Default: 1
+  ECSContainerPort:
+    Type: Number
+    Default: 80
+    Description: Port Number of container created by the task.
+  ECSTaskCPUUnit:
+    Type: String
+    Default: "256"  
+  ECSTaskMemory:
+    Type: String
+    Default: "512"
+  ECSTaskCpuMB:
+    Type: Number
+    Default: "1"
+    Description: Number of cpu units used by the task.
+
+Resources:
+#--------------------------------------------------------------#
+#VPC
+#--------------------------------------------------------------#
+
+  VPC:
+    Type: "AWS::EC2::VPC"
+    Properties: 
+      CidrBlock: !Ref VPCCIDR
+      EnableDnsSupport: "true"
+      EnableDnsHostnames: "true"
+      InstanceTenancy: default
+      Tags: 
+        - Key: Name
+          Value: !Sub "${PJPrefix}-vpc"
+
+#--------------------------------------------------------------#
+#subnet
+#--------------------------------------------------------------#
+
+# Public SubnetA Create
+  PublicSubnetA: 
+      Type: "AWS::EC2::Subnet"
+      Properties: 
+        AvailabilityZone: !Ref AvailabilityA
+        CidrBlock: !Ref PublicSubnetACIDR
+        VpcId: !Ref VPC 
+        Tags: 
+          - Key: Name
+            Value: !Sub "${PJPrefix}-public-subnet-a"
+  
+  # Public SubnetC Create
+  PublicSubnetC: 
+      Type: "AWS::EC2::Subnet"
+      Properties: 
+        AvailabilityZone: !Ref AvailabilityC
+        CidrBlock: !Ref PublicSubnetCCIDR
+        VpcId: !Ref VPC 
+        Tags: 
+          - Key: Name
+            Value: !Sub "${PJPrefix}-public-subnet-c"
+
+  #Private SubnetA Create
+  PrivateSubnetA:
+      Type: "AWS::EC2::Subnet"
+      Properties:
+        AvailabilityZone: !Ref AvailabilityA
+        CidrBlock: !Ref PrivateSubnetACIDR
+        VpcId: !Ref VPC 
+        Tags: 
+          - Key: Name
+            Value: !Sub "${PJPrefix}-private-subnet-a"
+
+  #Private SubnetA Create
+  PrivateSubnetC:
+      Type: "AWS::EC2::Subnet"
+      Properties:
+        AvailabilityZone: !Ref AvailabilityC
+        CidrBlock: !Ref PrivateSubnetCCIDR
+        VpcId: !Ref VPC 
+        Tags: 
+          - Key: Name
+            Value: !Sub "${PJPrefix}-private-subnet-a"
+
+#--------------------------------------------------------------#
+#igw(create + attach)
+#--------------------------------------------------------------#
+
+  InternetGateway: 
+      Type: "AWS::EC2::InternetGateway"
+      Properties: 
+        Tags: 
+          - Key: Name
+            Value: !Sub "${PJPrefix}-igw"
+  
+# IGW Attach
+  InternetGatewayAttachment: 
+      Type: "AWS::EC2::VPCGatewayAttachment"
+      Properties: 
+        InternetGatewayId: !Ref InternetGateway
+        VpcId: !Ref VPC 
+  
+#--------------------------------------------------------------#
+#Route table
+#--------------------------------------------------------------#
+
+# Public RouteTableA Create
+  PublicRouteTableA: 
+      Type: "AWS::EC2::RouteTable"
+      Properties: 
+        VpcId: !Ref VPC 
+        Tags: 
+          - Key: Name
+            Value: !Sub "${PJPrefix}-public-route-a"
+
+## Private RouteTableB Create
+  PrivateRouteTableA:
+    Type: "AWS::EC2::RouteTable"
+    Properties: 
+        VpcId: !Ref VPC 
+        Tags: 
+          - Key: Name
+            Value: !Sub "${PJPrefix}-private-route-a"
+
+#--------------------------------------------------------------#
+#Route table Association
+#--------------------------------------------------------------#
+
+# PublicRouteTable Associate SubnetA
+  PublicSubnetARouteTableAssociation: 
+      Type: "AWS::EC2::SubnetRouteTableAssociation"
+      Properties: 
+        SubnetId: !Ref PublicSubnetA 
+        RouteTableId: !Ref PublicRouteTableA
+  
+# PublicRouteTable Associate SubnetC
+  PublicSubnetCRouteTableAssociation: 
+      Type: "AWS::EC2::SubnetRouteTableAssociation"
+      Properties: 
+        SubnetId: !Ref PublicSubnetC 
+        RouteTableId: !Ref PublicRouteTableA
+
+#--------------------------------------------------------------#
+#security group
+#--------------------------------------------------------------#
+
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub "${PJPrefix}-alb-sg"
+      GroupDescription: SecGroupPublic
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+
+  ECSSecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      GroupName: !Sub "${PJPrefix}-ecs-sg"
+      GroupDescription: SecGroupPublic
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+
+#--------------------------------------------------------------#
+# ALB
+#--------------------------------------------------------------#
+
+  ALB:
+    Type: "AWS::ElasticLoadBalancingV2::LoadBalancer"
+    Properties:
+      Name: !Sub "${PJPrefix}-alb"
+      LoadBalancerAttributes:
+        - Key: "deletion_protection.enabled"
+          Value: false
+        - Key: "idle_timeout.timeout_seconds"
+          Value: 60
+        - Key: "access_logs.s3.enabled"
+          Value: true
+      Scheme: "internet-facing"
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Subnets:
+        - !Ref PublicSubnetA
+        - !Ref PublicSubnetC
+      Type: "application"
+      Tags:
+        - Key: Name
+          Value: !Sub "${PJPrefix}-alb"
+
+#--------------------------------------------------------------#
+# listener
+#--------------------------------------------------------------#
+
+  ALBListenerBlue:
+    Type: "AWS::ElasticLoadBalancingV2::Listener"
+    Properties:
+      DefaultActions:
+        - TargetGroupArn: !Ref BlueTargetGroup
+          Type: forward
+      LoadBalancerArn: !Ref ALB
+      Port: 80
+      Protocol: HTTP
+
+#--------------------------------------------------------------#
+# target group
+#--------------------------------------------------------------#
+
+  BlueTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckPath: /
+      VpcId: !Ref VPC
+      Name: !Sub "${PJPrefix}-blue-tg"
+      Protocol: HTTP
+      Port: 80
+      TargetType: ip
+
+#--------------------------------------------------------------#
+# ECR
+#--------------------------------------------------------------#
+
+  DockECR:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: test
+
+#--------------------------------------------------------------#
+# IAM role for ECS
+#--------------------------------------------------------------#
+
+  ECSTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: ecsTaskExecutionPolicy
+          PolicyDocument:
+            Statement:
+              Effect: Allow
+              Action:
+                - ecr:GetAuthorizationToken
+                - ecr:BatchCheckLayerAvailability
+                - ecr:GetDownloadUrlForLayer
+                - ecr:BatchGetImage
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Resource: '*'
+
+#--------------------------------------------------------------#
+# ECS
+#--------------------------------------------------------------#
+
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub ${PJPrefix}-cluster
+  ECSService:
+    Type: AWS::ECS::Service
+    DependsOn:
+      - ALBListenerBlue
+    Properties:
+      ServiceName: !Sub ${PJPrefix}-service
+      Cluster: !Ref ECSCluster
+      DesiredCount: !Ref ECSTaskDesiredCount
+      LaunchType: Fargate
+      LoadBalancer:
+        - ContainerName: !Ref PJPrefix
+          ContainerPort: !Ref ECSContainerPort
+          TargetGroupArn: !Ref BlueTargetGroup
+      TaskDefinition: !Ref ECSTaskDefinition
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          SecurityGroups:
+            - !Ref ECSSecurityGroup
+          Subnets: !Ref PublicSubnetA
+  ECSTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub ${PJPrefix}
+      ExecutionRoleArn: !GetAtt ECSTaskExecutionRole.Arn
+      ContainerDefinition:
+        - Name: !Ref PJPrefix
+          PortMappings:
+            - ContainerPort: !Ref ECSContainerPort
+              HostPort: !Ref ECSContainerPort
+              Protocol: tcp
+          Image: !Ref ECSImage
+      Cpu: !Ref ECSTaskCpuMB
+      Memory: !Ref ECSTaskMemory
+      TaskRoleArn: !GetAtt ECSTaskExecutionRole.Arn
+      RequiresCompatibilities: 
+        - FARGATE
+      NetworkMode: awsvpc
+
+#--------------------------------------------------------------#
+# CloudWatch logs
+#--------------------------------------------------------------#
+
+
+
+
