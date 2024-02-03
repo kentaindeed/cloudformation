@@ -56,6 +56,13 @@ Parameters:
     Type: Number
     Default: "1"
     Description: Number of cpu units used by the task.
+  ECSLogsRetDays:
+    Type: Number
+    Default: "7"
+    Description: Number of the days logs retained in cloudwatch
+
+
+
 
 Resources:
 #--------------------------------------------------------------#
@@ -233,6 +240,8 @@ Resources:
           Value: 60
         - Key: "access_logs.s3.enabled"
           Value: true
+        - Key: access_logs.s3.bucket
+          Value: !Sub ${PJPrefix}-alb-logs
       Scheme: "internet-facing"
       SecurityGroups:
         - !Ref ALBSecurityGroup
@@ -358,13 +367,32 @@ Resources:
 # CloudWatch logs
 #--------------------------------------------------------------#
 
-
-
-
-
+  CloudwatchLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /ecs/${PJPrefix}
+      RetentionInDays: !Ref ECSLogsRetDays
 
 #--------------------------------------------------------------#
 # S3
 #--------------------------------------------------------------#
 
+  BucketForAlbLogs:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub ${PJPrefix}-alb-logs
+  BucketPolicyALBLogBucket:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref BucketForAlbLogs
+      PolicyDocument:
+        Id: !Sub ${PJPrefix}-alb-logs-policy
+        Version: '2012-10-17'
+        Statement:
+          - Action:
+              - s3:PutObject
+            Effect: Allow
+
+    
+      
 
