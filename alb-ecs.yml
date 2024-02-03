@@ -61,9 +61,6 @@ Parameters:
     Default: "7"
     Description: Number of the days logs retained in cloudwatch
 
-
-
-
 Resources:
 #--------------------------------------------------------------#
 #VPC
